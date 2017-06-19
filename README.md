@@ -1,2 +1,3 @@
 # ProTest
-A minimalistic test framework written in C++ providing scenario based, stateful, acceptance testing where application user interface is mocked using test stubs.
+A minimalistic test framework written in C++ providing scenario based, stateful acceptance testing where application user interface is mocked using test stubs. Refer to Sample.cpp for usage guidance.
+The sample defines a simple application class, fake user interface implementing the same abstract interface as the application requires, a test context to hold test state and pass it on among steps, and a few test steps. It then adds all the test steps to a test scenario. Then the default() main function is inserted. If you compile, link and execute the Sample, you will have an idea of what you should expect when you have finished writing your test.
