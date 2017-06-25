@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <functional>
 #include <sstream>
 
 // Include the test framework header.
@@ -174,9 +175,10 @@ public:
 
     void Verify() override {
         auto ui = GetTestContext()->UI;
-        bool success = ui->m_TitleBar == "My Calculator" && ui->m_StatusBar == "Ready" && ui->m_ResultContents == "0";
-        SetPassed(success);
-    }
+		ACC_TEST_CHECK_EQUAL(ui->m_TitleBar, "My Calculator");
+		ACC_TEST_CHECK_EQUAL(ui->m_StatusBar, "Ready");
+		ACC_TEST_CHECK_EQUAL(ui->m_ResultContents, "0");
+	}
 };
 
 // A parameterized test step: the parameters are passed in through constructor and determined when adding the instance to the 
@@ -198,8 +200,8 @@ public:
 
     void Verify() override {
         auto ui = GetTestContext()->UI;
-        bool success = ui->m_StatusBar == m_Status && ui->m_ResultContents == m_Result;
-        SetPassed(success);
+		ACC_TEST_CHECK_EQUAL(ui->m_StatusBar, m_Status);
+		ACC_TEST_CHECK_EQUAL(ui->m_ResultContents, m_Result);
     }
 
 private:
@@ -234,8 +236,9 @@ public:
     void Verify() override {
         auto ui = GetTestContext()->UI;
         bool success = ui->m_StatusBar == m_Status && ui->m_ResultContents == m_Result;
-        SetPassed(success);
-    }
+		ACC_TEST_CHECK_EQUAL(ui->m_StatusBar, m_Status);
+		ACC_TEST_CHECK_EQUAL(ui->m_ResultContents, m_Result);
+	}
 
     static std::string CreateDescription(const std::string& input, const std::string& status, const std::string& result) {
         std::ostringstream desc;
@@ -269,9 +272,8 @@ public:
 
     void Verify() override {
         auto ui = GetTestContext()->UI;
-        bool success = ui->VerifyExpectedClose();
-        SetPassed(ui->VerifyExpectedClose());
-    }
+		Check(ui->VerifyExpectedClose()) << "Close not called on the GUI!";
+	}
 };
 
 // Each test scenario, which is usually composed of many steps, must inherit AccTestScenario. During construction, it must add 

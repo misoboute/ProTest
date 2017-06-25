@@ -24,6 +24,7 @@
 #define __ACC_TEST_H__
 
 #include <iostream>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -41,12 +42,14 @@ namespace ProTest {
         // Details of a test step
 
         struct Step {
-
-            Step(const std::string& name, const std::string& description)
-            : Name(name), Description(description) {
+			Step(const std::string& name, const std::string& description)
+				: Name(name), Description(description) { }
+            Step(const std::string& name, const std::string& description, const std::map<int, std::string> checkOutputs)
+            : Name(name), Description(description), CheckOutputs(checkOutputs) {
             }
             std::string Name;
             std::string Description;
+			std::map<int, std::string> CheckOutputs;
         };
 
         bool AllPassed = false;
@@ -74,8 +77,11 @@ namespace ProTest {
     // to verify them in Verify().
     // You will also, almost very certainly, want to override Verify() to see if the action has had the expected effect on the 
     // context - otherwise, what's the point of testing! If you are using mock objects in your context, make sure to verify all the
-    // expectations or reset them before the context is handed over to the unsuspecting next step. Also make sure to call 
-    // SetSuccess to indicate whether you consider the test passed or not.
+    // expectations or reset them before the context is handed over to the unsuspecting next step. Use the protected Check() 
+	// method within your Verify() implementation to check if a certain condition is met. If the condition is true the test step is 
+	// considered passed. If one of the Check invocations within the test step is given a false value, the whole step is considered
+	// failed. You can pass data to the return value from the Check() calls. This data will be sent to the output if the check 
+	// should fail.
     // If you need somewhere to initialize the context before running the step, you will need to override Setup(). The finalizing
     // counterpart is, of course, Teardown().
 
@@ -99,7 +105,7 @@ namespace ProTest {
         }
 
         virtual void Verify() {
-            SetPassed(true);
+			Check(true) << "All Good";;
         }
 
         virtual void Teardown() {
@@ -137,23 +143,27 @@ namespace ProTest {
             return m_Description;
         }
 
+		std::map<int, std::string> GetCheckOutputs() {
+			std::map<int, std::string> outputs;
+			for (auto& strm : m_CheckOutputs)
+				outputs[strm.first] = strm.second.str();
+			return outputs;
+		}
+
     protected:
 
         TestContextType* GetTestContext() {
             return m_Context;
         }
 
-        void SetPassed(bool success) {
-            m_IsVerified = true;
-            m_Passed = success;
+        std::ostream& Check(bool predicate) {
+			m_Passed = m_CheckCounter > 0 ? m_Passed && predicate : predicate;
+			m_IsVerified = true;
+			return m_CheckOutputs[m_CheckCounter++];
         }
 
         void SetActed() {
             m_HasActed = true;
-        }
-
-        void SetVerified() {
-            m_IsVerified = true;
         }
 
     private:
@@ -165,6 +175,8 @@ namespace ProTest {
         std::string m_Name = "NOT SET";
         std::string m_Description = "NOT SET";
         TestContextType* m_Context = nullptr;
+		std::map<int, std::ostringstream> m_CheckOutputs;
+		int m_CheckCounter = 0;
     };
 
     // The main test scenario which is composed of multiple steps must inherit AccTestScenario. You should create your test steps 
@@ -273,7 +285,8 @@ namespace ProTest {
             ScenarioSetup scenSetup(this);
             for (const auto& step : m_Steps) {
                 if (m_Report.RequiredStepFailure) {
-                    m_Report.OmittedSteps.push_back(AccTestReport::Step(step->GetName(), step->GetDescription()));
+                    m_Report.OmittedSteps.push_back(
+						AccTestReport::Step(step->GetName(), step->GetDescription()));
                     continue;
                 }
                 RunStepUnprotected(step);
@@ -291,13 +304,13 @@ namespace ProTest {
                 didThrow = true;
             }
             bool passedThrowReq = didThrow == step->MustThrow();
-            if (passedThrowReq)
-                step->Verify();
+            step->Verify();
             if (passedThrowReq && step->Passed()) {
                 m_Report.PassedSteps.push_back(AccTestReport::Step(step->GetName(), step->GetDescription()));
             } else {
-                m_Report.FailedSteps.push_back(AccTestReport::Step(step->GetName(), step->GetDescription()));
-                if (step->IsRequired())
+				m_Report.FailedSteps.push_back(
+					AccTestReport::Step(step->GetName(), step->GetDescription(), step->GetCheckOutputs()));
+				if (step->IsRequired())
                     m_Report.RequiredStepFailure = true;
             }
         }
@@ -360,9 +373,13 @@ namespace ProTest {
     private:
 
         void DetailSteps(std::ostream& strm, const std::vector<AccTestReport::Step>& reps) {
-            for (const auto& stepRep : reps)
-                strm << "\tName: " << stepRep.Name << std::endl <<
-                    "\tDescription: " << stepRep.Description << std::endl << std::endl;
+			for (const auto& stepRep : reps) {
+				strm << "\tName: " << stepRep.Name << std::endl <<
+					"\tDescription: " << stepRep.Description << std::endl;
+				for (const auto& output : stepRep.CheckOutputs)
+					strm << "\t\tCheck #" << output.first << " => " << output.second << std::endl;
+				strm << std::endl;
+			}
         }
 
         bool m_DetailFailedSteps = true;
@@ -380,7 +397,7 @@ int main ()  \
     TEST_SCENARIO_NAME test;    \
     test.Run(); \
     const auto& report = test.GetReport();  \
-    AccTestReportFormatter fmt;    \
+    ProTest::AccTestReportFormatter fmt(true, true, true);    \
     fmt.GenerateReport(report); \
     if (report.RequiredStepFailure) \
         return 2;   \
@@ -390,3 +407,8 @@ int main ()  \
 }
 
 #endif // __ACC_TEST_H__
+
+// Use this macro in your implementation of Verify() within the test steps to check for equality of two values with suitable 
+// failure output.
+#define ACC_TEST_CHECK_EQUAL(LEFT, RIGHT)	\
+Check((LEFT) == (RIGHT)) << "NOT EQUAL: "#LEFT" = " << (LEFT) << ", "#RIGHT" = " << (RIGHT)
