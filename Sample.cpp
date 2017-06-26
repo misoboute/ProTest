@@ -175,14 +175,15 @@ public:
 
     void Verify() override {
         auto ui = GetTestContext()->UI;
-		ACC_TEST_CHECK_EQUAL(ui->m_TitleBar, "My Calculator");
-		ACC_TEST_CHECK_EQUAL(ui->m_StatusBar, "Ready");
-		ACC_TEST_CHECK_EQUAL(ui->m_ResultContents, "0");
-	}
+        ACC_TEST_CHECK_EQUAL(ui->m_TitleBar, "My Calculator");
+        ACC_TEST_CHECK_EQUAL(ui->m_StatusBar, "Ready");
+        ACC_TEST_CHECK_EQUAL(ui->m_ResultContents, "0");
+    }
 };
 
 // A parameterized test step: the parameters are passed in through constructor and determined when adding the instance to the 
 // scenario. 
+
 class TestStepInput_PressAdd_Status_Result : public AccTestStep<CalcTestContext> {
 public:
 
@@ -200,8 +201,8 @@ public:
 
     void Verify() override {
         auto ui = GetTestContext()->UI;
-		ACC_TEST_CHECK_EQUAL(ui->m_StatusBar, m_Status);
-		ACC_TEST_CHECK_EQUAL(ui->m_ResultContents, m_Result);
+        ACC_TEST_CHECK_EQUAL(ui->m_StatusBar, m_Status);
+        ACC_TEST_CHECK_EQUAL(ui->m_ResultContents, m_Result);
     }
 
 private:
@@ -236,9 +237,9 @@ public:
     void Verify() override {
         auto ui = GetTestContext()->UI;
         bool success = ui->m_StatusBar == m_Status && ui->m_ResultContents == m_Result;
-		ACC_TEST_CHECK_EQUAL(ui->m_StatusBar, m_Status);
-		ACC_TEST_CHECK_EQUAL(ui->m_ResultContents, m_Result);
-	}
+        ACC_TEST_CHECK_EQUAL(ui->m_StatusBar, m_Status);
+        ACC_TEST_CHECK_EQUAL(ui->m_ResultContents, m_Result);
+    }
 
     static std::string CreateDescription(const std::string& input, const std::string& status, const std::string& result) {
         std::ostringstream desc;
@@ -272,8 +273,8 @@ public:
 
     void Verify() override {
         auto ui = GetTestContext()->UI;
-		Check(ui->VerifyExpectedClose()) << "Close not called on the GUI!";
-	}
+        Check(ui->VerifyExpectedClose()) << "Close not called on the GUI!";
+    }
 };
 
 // Each test scenario, which is usually composed of many steps, must inherit AccTestScenario. During construction, it must add 
@@ -284,7 +285,8 @@ public:
 class MyTestScenario : public AccTestScenario<CalcTestContext> {
 public:
 
-    MyTestScenario() {
+    MyTestScenario()
+    : AccTestScenario<CalcTestContext>("MyTestScenario", "This is the only scenario, at least until now!") {
         AddStep(std::make_shared<TestStepInitAppSetsCorrectUIState>("1_InitApp_MustSet_Status_Result_Title"));
         AddStep(std::make_shared<TestStepInput_PressAdd_Status_Result>(
                 "2_Input10_Add_Result10_Status_Ready", "10", "Ready", "10"));
@@ -329,6 +331,15 @@ public:
 
 };
 
+// Each test executable must have exactly one test suite. Ours has only one scenario (start to finish).
+class MyTestSuite : public AccTestSuite {
+public:
+    MyTestSuite() {
+        AddScenario(std::make_shared<MyTestScenario>());
+    }
+};
+
 // Use the default main() function. You could also clone macro contents and create your own main() function to customize your test
-// application. Currently, argc and argv parameters are ignored by the default main() function.
-ACC_TEST_DEFAULT_MAIN_FUNC(MyTestScenario)
+// application. But why would you want to do that, I don't get it! Anyway, essentially, this inserts a main function that creates 
+// an instance of MyTestSuite and passes it to an instance of AccTestRunner. AccTestRunner will take care of your argc and argv.
+ACC_TEST_DEFAULT_MAIN_FUNC(MyTestSuite)
