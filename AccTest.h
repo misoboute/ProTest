@@ -393,7 +393,7 @@ namespace ProTest {
                     suiteReport.FailedScenarios.push_back(scenReport);
             }
             suiteReport.NumberOfScenarios = m_Scenarios.size();
-            suiteReport.NumberOfPassed = suiteReport.NumberOfPassed;
+            suiteReport.NumberOfPassed = suiteReport.PassedScenarios.size();
             suiteReport.NumberOfFailed = suiteReport.FailedScenarios.size();
             suiteReport.NumberOfTerminated = suiteReport.TerminatedScenarios.size();
             suiteReport.AllPassed = suiteReport.NumberOfPassed == suiteReport.NumberOfScenarios;
