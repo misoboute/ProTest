@@ -120,12 +120,10 @@ namespace ProTest {
         }
 
         virtual void Act() {
-            SetActed();
         }
 
         virtual void Verify() {
-            Check(true) << "All Good";
-            ;
+            Check(true);
         }
 
         virtual void Teardown() {
@@ -143,11 +141,7 @@ namespace ProTest {
             return m_IsVerified;
         }
 
-        bool HasActed() {
-            return m_HasActed;
-        }
-
-        bool MustThrow() {
+		bool MustThrow() {
             return m_MustThrow;
         }
 
@@ -179,15 +173,11 @@ namespace ProTest {
         std::ostream& Check(bool predicate) {
             m_Passed = m_CheckCounter > 0 ? m_Passed && predicate : predicate;
             m_IsVerified = true;
-            return m_CheckOutputs[m_CheckCounter++];
-        }
-
-        void SetActed() {
-            m_HasActed = true;
+			m_CheckCounter++;
+            return predicate ? m_SuccessCheckOutput : m_CheckOutputs[m_CheckCounter];
         }
 
     private:
-        bool m_HasActed = false;
         bool m_IsVerified = false;
         bool m_IsRequired = false;
         bool m_MustThrow = false;
@@ -196,6 +186,7 @@ namespace ProTest {
         std::string m_Description = "NOT SET";
         TestContextType* m_Context = nullptr;
         std::map<int, std::ostringstream> m_CheckOutputs;
+		std::ostringstream m_SuccessCheckOutput;
         int m_CheckCounter = 0;
     };
 
@@ -343,7 +334,7 @@ namespace ProTest {
             }
         }
 
-        void RunStepUnprotected(const std::shared_ptr< AccTestStep<TestContextType> > step) {
+        void RunStepUnprotected(const std::shared_ptr< AccTestStep<TestContextType> >& step) {
             step->SetContext(&m_TestContext);
             StepSetup stepSetup(step.get());
             step->Expect();
@@ -454,7 +445,7 @@ namespace ProTest {
                     "\n**********************************************************"
                     "\n********************** PASSED TESTS **********************");
 
-            if (m_DetailOmittedSteps)
+            if (m_DetailTerminatedScenarios)
                 DetailScenarios(strm, rep.TerminatedScenarios,
                     "\n**********************************************************"
                     "\n******************** TERMINATED TESTS ********************");
@@ -513,7 +504,8 @@ namespace ProTest {
                 strm << "\tName: " << stepRep.Name << std::endl <<
                         "\tDescription: " << stepRep.Description << std::endl;
                 for (const auto& output : stepRep.CheckOutputs)
-                    strm << "\t\tCheck #" << output.first << " => " << output.second << std::endl;
+					if (!stepRep.CheckOutputs.empty())
+						strm << "\t\tCheck #" << output.first << " => " << output.second << std::endl;
                 strm << std::endl;
             }
         }
