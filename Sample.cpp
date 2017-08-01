@@ -287,36 +287,36 @@ public:
 
     MyTestScenario()
     : AccTestScenario<CalcTestContext>("MyTestScenario", "This is the only scenario, at least until now!") {
-        AddStep(std::make_shared<TestStepInitAppSetsCorrectUIState>("1_InitApp_MustSet_Status_Result_Title"));
-        AddStep(std::make_shared<TestStepInput_PressAdd_Status_Result>(
-                "2_Input10_Add_Result10_Status_Ready", "10", "Ready", "10"));
-        AddStep(std::make_shared<TestStepInput_PressAdd_Status_Result>(
-                "3_Input20_Add_Result30_Status_Ready", "20", "Ready", "30"));
-        AddStep(std::make_shared<TestStepInput_PressSubtract_Status_Result>(
-                "4_Input15_Subtract_Result15_Status_Ready", "15", "Ready", "15"));
-        AddStep(std::make_shared<TestStepInput_PressSubtract_Status_Result>(
-                "5_Input7_Subtract_Result8_Status_Ready", "7", "Ready", "8"));
-        AddStep(std::make_shared<TestStepInput_PressAdd_Status_Result>(
-                "6_Input52_Add_Result60_Status_Ready", "52", "Ready", "60"));
-        AddStep(std::make_shared<TestStepInput_PressAdd_Status_Result>(
-                "7_Input\"3gsg\"_Add_Result60_Status_Error", "3gsg", "Error", "60"));
-        AddStep(std::make_shared<TestStepInput_PressSubtract_Status_Result>(
-                "8_Input23_Subtract_Result37_Status_Ready", "23", "Ready", "37"));
-        AddStep(std::make_shared<TestStepInput_PressSubtract_Status_Result>(
-                "9_Input\"sdvn8e\"_Subtract_Result8_Status_Ready", "sdvn8e", "Error", "37"));
-        AddStep(std::make_shared<TestStepInput_PressAdd_Status_Result>(
-                "10_Input32_Add_Result69_Status_Ready", "32", "Ready", "69"));
-        AddStep(std::make_shared<TestStepExitingAppMustCloseTheUI>("11_ExitApp_UIMustBeClosed"));
-        AddStep(std::make_shared<TestStepInitAppSetsCorrectUIState>("12_InitApp_MustSet_Status_Result_Title"));
+        CreateStep<TestStepInitAppSetsCorrectUIState>("1_InitApp_MustSet_Status_Result_Title");
+        CreateStep<TestStepInput_PressAdd_Status_Result>(
+                "2_Input10_Add_Result10_Status_Ready", "10", "Ready", "10");
+        CreateStep<TestStepInput_PressAdd_Status_Result>(
+                "3_Input20_Add_Result30_Status_Ready", "20", "Ready", "30");
+        CreateStep<TestStepInput_PressSubtract_Status_Result>(
+                "4_Input15_Subtract_Result15_Status_Ready", "15", "Ready", "15");
+        CreateStep<TestStepInput_PressSubtract_Status_Result>(
+                "5_Input7_Subtract_Result8_Status_Ready", "7", "Ready", "8");
+        CreateStep<TestStepInput_PressAdd_Status_Result>(
+                "6_Input52_Add_Result60_Status_Ready", "52", "Ready", "60");
+        CreateStep<TestStepInput_PressAdd_Status_Result>(
+                "7_Input\"3gsg\"_Add_Result60_Status_Error", "3gsg", "Error", "60");
+        CreateStep<TestStepInput_PressSubtract_Status_Result>(
+                "8_Input23_Subtract_Result37_Status_Ready", "23", "Ready", "37");
+        CreateStep<TestStepInput_PressSubtract_Status_Result>(
+                "9_Input\"sdvn8e\"_Subtract_Result8_Status_Ready", "sdvn8e", "Error", "37");
+        CreateStep<TestStepInput_PressAdd_Status_Result>(
+                "10_Input32_Add_Result69_Status_Ready", "32", "Ready", "69");
+        CreateStep<TestStepExitingAppMustCloseTheUI>("11_ExitApp_UIMustBeClosed");
+        CreateStep<TestStepInitAppSetsCorrectUIState>("12_InitApp_MustSet_Status_Result_Title");
         // Yes, we can start the app again after exiting! Sure some scenarios work like that; like when you're testing persistence 
         // of app state, you definitely need to exit the app and start it again to see if things stay the same after restarting.
-        AddStep(std::make_shared<TestStepInput_PressSubtract_Status_Result>(
-                "13_Input-25_Subtract_Result25_Status_Ready", "-25", "Ready", "25"));
+        CreateStep<TestStepInput_PressSubtract_Status_Result>(
+                "13_Input-25_Subtract_Result25_Status_Ready", "-25", "Ready", "25");
         // Step 13 will fail because our calculator doesn't accommodate for negative numbers and treats them as non-numerical
         // strings. Therefore, our subsequent steps that count on current app state will probably fail.
-        AddStep(std::make_shared<TestStepInput_PressAdd_Status_Result>(
-                "14_Input20_Add_Result45_Status_Ready", "20", "Ready", "45"));
-        AddStep(std::make_shared<TestStepExitingAppMustCloseTheUI>("15_ExitApp_UIMustBeClosed"));
+        CreateStep<TestStepInput_PressAdd_Status_Result>(
+                "14_Input20_Add_Result45_Status_Ready", "20", "Ready", "45");
+        CreateStep<TestStepExitingAppMustCloseTheUI>("15_ExitApp_UIMustBeClosed");
     }
 
     void Setup() override {
@@ -335,7 +335,7 @@ public:
 class MyTestSuite : public AccTestSuite {
 public:
     MyTestSuite() {
-        AddScenario(std::make_shared<MyTestScenario>());
+        CreateScenario<MyTestScenario>();
     }
 };
 
