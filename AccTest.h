@@ -35,54 +35,27 @@ namespace ProTest {
     template <class T> class AccTestStep;
     template <class T> class AccTestScenario;
 
-    // Details of a test step
-
-    struct AccTestStepReport {
-
-        AccTestStepReport(const std::string& name, const std::string& description)
-        : Name(name), Description(description) {
-        }
-
-        AccTestStepReport(const std::string& name, const std::string& description, const std::map<int, std::string> checkOutputs)
-        : Name(name), Description(description), CheckOutputs(checkOutputs) {
-        }
-
-        std::string Name;
-        std::string Description;
-        std::map<int, std::string> CheckOutputs;
-    };
-
-    // This structure holds test result and other stats after the test scenario is run; it can be retrieved by calling 
-    // AccTestScenario::GetReport()
-
-    struct AccTestScenarioReport {
-        bool AllPassed = false;
-        bool RequiredStepFailure = false;
-        bool ExceptionInTestProcedure = false;
-        int NumberOfSteps = 0; // Total number of steps within the scenario
-        int NumberOfActed = 0; // Number of steps which were acted
-        int NumberOfPassed = 0; // Number of steps successfully passed
-        int NumberOfFailed = 0; // Number of failed test steps
-        int NumberOfOmitted = 0; // Number of test steps omitted because some required prior step failed.
-        std::string Name = "N/A";
-        std::string Description = "N/A";
-        std::vector<AccTestStepReport> OmittedSteps; // Details of the omitted steps
-        std::vector<AccTestStepReport> FailedSteps; // Details of the failed steps
-        std::vector<AccTestStepReport> PassedSteps; // Details of the passed steps
-    };
-
-    // Results of running a test suite is kept within this structure. It is returned by AccTestSuite::Run().
-
-    struct AccTestSuiteReport {
-        bool AllPassed = false;
-        int NumberOfScenarios = 0;
-        int NumberOfPassed = 0;
-        int NumberOfFailed = 0;
-        int NumberOfTerminated = 0;
-        std::vector<AccTestScenarioReport> PassedScenarios;
-        std::vector<AccTestScenarioReport> FailedScenarios;
-        std::vector<AccTestScenarioReport> TerminatedScenarios;
-    };
+	class AccTestObserverIface
+	{
+	public:
+		virtual void StartingTestSuite(std::size_t numberOfTestScenarios) = 0; 
+		virtual void StartingScenario(const std::string& name, const std::string& description, std::size_t numberOfSteps) = 0;
+		virtual void ExceptionInScenario() = 0;
+		virtual void StartingScenarioSetup() = 0;
+		virtual void ScenarioTerminated() = 0;
+		virtual void RunningScenarioTeardown() = 0;
+		virtual void StartingScenarioStep(const std::string& name, const std::string& description) = 0;
+		virtual void ExecutingStepSetup() = 0;
+		virtual void RunningStepExpectations() = 0;
+		virtual void StartingStepAct() = 0;
+		virtual void StepExceptionExpectationNotMet(bool didThrow) = 0;
+		virtual void StartingStepVerification() = 0;
+		virtual void FinishedStepVerification(bool passed) = 0;
+		virtual void StepVerificationFailed(const std::map<int, std::string>& failedCheckOutputs) = 0; 
+		virtual void ExecutingStepTeardown() = 0;
+		virtual void FinishedScenario() = 0;
+		virtual void FinishedTestSuite() = 0;
+	};
 
     // Each test step must inherit AccTestStep and override one or more of the virtual methods. Your derived constructor must 
     // the base constructor and give it the name, description, and the flags isRequired and mustThrow. Turning isRequired on for 
@@ -159,8 +132,8 @@ namespace ProTest {
 
         std::map<int, std::string> GetCheckOutputs() {
             std::map<int, std::string> outputs;
-            for (auto& strm : m_CheckOutputs)
-                outputs[strm.first] = strm.second.str();
+            for (const auto& strm : m_CheckOutputs)
+				outputs[strm.first] = strm.second.str();
             return outputs;
         }
 
@@ -197,8 +170,7 @@ namespace ProTest {
         : m_Name(name), m_Description(description) {
         }
 
-        virtual void Run() = 0;
-        virtual const AccTestScenarioReport& GetReport() const = 0;
+        virtual void Run(const std::shared_ptr<AccTestObserverIface>& testObserver) = 0;
 
         std::string GetName() {
             return m_Name;
@@ -237,25 +209,22 @@ namespace ProTest {
         : AccTestScenarioBase(name, description) {
         }
 
-        void Run() override {
-            InitializeReport();
+        void Run(const std::shared_ptr<AccTestObserverIface>& testObserver) override {
+			testObserver->StartingScenario(GetName(), GetDescription(), m_Steps.size());
             try {
-                RunUnprotected();
+                RunUnprotected(testObserver);
             } catch (...) {
-                m_Report.ExceptionInTestProcedure = true;
+				testObserver->ExceptionInScenario();
             }
-            UpdateReport();
-        }
-
-        const AccTestScenarioReport& GetReport() const override {
-            return m_Report;
-        }
+			testObserver->FinishedScenario();
+		}
 
     protected:
 
-        void AddStep(std::shared_ptr< AccTestStep<TestContextType> > step) {
-            m_Steps.push_back(step);
-        }
+		template <class StepType, class... Args>
+		void CreateStep(Args... constructionArgs) {
+			m_Steps.push_back(std::make_shared<StepType>(constructionArgs...));
+		}
 
         TestContextType* GetTestContext() {
             return &m_TestContext;
@@ -303,62 +272,209 @@ namespace ProTest {
         virtual void Teardown() {
         }
 
-        void InitializeReport() {
-            m_Report.ExceptionInTestProcedure = false;
-            m_Report.FailedSteps.clear();
-            m_Report.PassedSteps.clear();
-            m_Report.OmittedSteps.clear();
-            UpdateReport();
-        }
-
-        void UpdateReport() {
-            m_Report.Name = GetName();
-            m_Report.Description = GetDescription();
-            m_Report.NumberOfSteps = m_Steps.size();
-            m_Report.NumberOfPassed = m_Report.PassedSteps.size();
-            m_Report.NumberOfFailed = m_Report.FailedSteps.size();
-            m_Report.NumberOfOmitted = m_Report.OmittedSteps.size();
-            m_Report.NumberOfActed = m_Report.NumberOfPassed + m_Report.NumberOfFailed;
-            m_Report.RequiredStepFailure = !m_Report.OmittedSteps.empty();
-            m_Report.AllPassed = m_Report.NumberOfPassed == m_Report.NumberOfSteps;
-        }
-
-        void RunUnprotected() {
+        void RunUnprotected(const std::shared_ptr<AccTestObserverIface>& testObserver) {
+			testObserver->StartingScenarioSetup();
             ScenarioSetup scenSetup(this);
             for (const auto& step : m_Steps) {
-                if (m_Report.RequiredStepFailure) {
-                    m_Report.OmittedSteps.push_back(AccTestStepReport(step->GetName(), step->GetDescription()));
-                    continue;
+				auto requiredStepFailed = !RunStepUnprotected(step, testObserver) && step->IsRequired();
+				if (requiredStepFailed) {
+					testObserver->ScenarioTerminated();
+                    break;
                 }
-                RunStepUnprotected(step);
             }
+			testObserver->RunningScenarioTeardown();
         }
 
-        void RunStepUnprotected(const std::shared_ptr< AccTestStep<TestContextType> >& step) {
+        bool RunStepUnprotected(const std::shared_ptr< AccTestStep<TestContextType> >& step,
+			const std::shared_ptr<AccTestObserverIface>& testObserver) {
+			testObserver->StartingScenarioStep(step->GetName(), step->GetDescription());
             step->SetContext(&m_TestContext);
-            StepSetup stepSetup(step.get());
-            step->Expect();
-            bool didThrow = false;
+			testObserver->ExecutingStepSetup();
+			StepSetup stepSetup(step.get());
+			testObserver->RunningStepExpectations();
+			step->Expect();
+			testObserver->StartingStepAct();
+			bool didThrow = false;
             try {
                 step->Act();
             } catch (...) {
-                didThrow = true;
+				didThrow = true;
             }
             bool passedThrowReq = didThrow == step->MustThrow();
-            step->Verify();
-            if (passedThrowReq && step->Passed()) {
-                m_Report.PassedSteps.push_back(AccTestStepReport(step->GetName(), step->GetDescription()));
-            } else {
-                m_Report.FailedSteps.push_back(AccTestStepReport(step->GetName(), step->GetDescription(), step->GetCheckOutputs()));
-                if (step->IsRequired())
-                    m_Report.RequiredStepFailure = true;
-            }
-        }
+			if (!passedThrowReq)
+				testObserver->StepExceptionExpectationNotMet(didThrow);
+			else
+			{
+				testObserver->StartingStepVerification();
+				step->Verify();
+				testObserver->FinishedStepVerification(step->Passed());
+				if (!step->Passed())
+					testObserver->StepVerificationFailed(step->GetCheckOutputs());
+			}
+			testObserver->ExecutingStepTeardown();
+			return step->Passed();
+		}
 
         std::vector< std::shared_ptr< AccTestStep<TestContextType> > > m_Steps;
         TestContextType m_TestContext;
-        AccTestScenarioReport m_Report;
     };
+
+	class AccTestObserver : public AccTestObserverIface
+	{
+	public:
+		AccTestObserver(std::ostream& outputStream)
+			: m_OutputStream(outputStream) { }
+
+		void StartingTestSuite(std::size_t numberOfTestScenarios) override
+		{
+			m_OutputStream << "Starting execution of test suite" << std::endl;
+			m_NumberOfScenarios = numberOfTestScenarios;
+		}
+
+		void StartingScenario(const std::string& name, const std::string& description, std::size_t numberOfSteps) override
+		{
+			m_OutputStream << std::endl << "  Starting execution of test scenario \"" << name << "\"" << std::endl <<
+				"    Description: " << description << std::endl << "    Total number of steps: " << numberOfSteps << std::endl;
+			m_NumberOfStepsInScenario = numberOfSteps;
+		}
+
+		void StartingScenarioSetup() override
+		{
+			m_OutputStream << "    Starting scenario setup..." << std::endl;
+		}
+
+		void ScenarioTerminated() override
+		{
+			m_OutputStream << "    A required scenario step failed; scenario execution terminated!" << std::endl;
+			++m_NumberOfScenariosTerminated;
+		}
+
+		void RunningScenarioTeardown() override
+		{
+			m_OutputStream << "    Running scenario tear-down..." << std::endl;
+		}
+
+		void StartingScenarioStep(const std::string& name, const std::string& description) override
+		{
+			m_OutputStream << "      Starting execution of scenario step \"" << name << "\"" << std::endl <<
+				"      Description: " << description << std::endl;
+			m_StepPassed = true;
+		}
+
+		void ExecutingStepSetup() override
+		{
+			m_OutputStream << "        Running scenario step setup..." << std::endl;
+		}
+
+		void RunningStepExpectations() override
+		{
+			m_OutputStream << "        Running scenario step expectations..." << std::endl;
+		}
+
+		void StartingStepAct() override
+		{
+			m_OutputStream << "        Starting scenario step act..." << std::endl;
+		}
+
+		void ExceptionInScenario() override
+		{
+			m_OutputStream << "      Exception thrown during execution of scenario; terminated!" << std::endl;
+			++m_NumberOfScenariosTerminated;
+		}
+
+		void StepExceptionExpectationNotMet(bool didThrow) override
+		{
+			m_OutputStream << "        " << 
+				(didThrow ? "Unexpected exception was thrown!" : "Expected exception was not thrown!") << std::endl;
+			m_StepPassed = m_StepPassed && false;
+		}
+
+		void StartingStepVerification() override
+		{
+			m_OutputStream << "        Starting scenario step verification..." << std::endl;
+		}
+
+		void FinishedStepVerification(bool passed) override
+		{
+			m_OutputStream << "        Scenario step verification " << (passed ? "passed." : "failed!") << std::endl;
+			m_StepPassed = m_StepPassed && passed;
+		}
+
+		void StepVerificationFailed(const std::map<int, std::string>& failedCheckOutputs) override
+		{
+			m_OutputStream << "        Failed step checks:" << std::endl;
+			for (const auto& checkOutput : failedCheckOutputs)
+				m_OutputStream << "          Check #" << checkOutput.first << " => " << checkOutput.second << std::endl;
+		}
+
+		void ExecutingStepTeardown() override
+		{
+			m_OutputStream << "        Running scenario step tear-down..." << std::endl << std::endl;
+			if (m_StepPassed)
+				++m_NumberOfStepsPassed;
+			else
+				++m_NumberOfStepsFailed;
+		}
+
+		void FinishedScenario() override
+		{
+			m_OutputStream << "  Finished execution of test scenario." << std::endl;
+			if (m_NumberOfStepsPassed == m_NumberOfStepsInScenario)
+				m_OutputStream << "    All steps passed successfully. Total: " << m_NumberOfStepsInScenario << std::endl;
+			else
+			{
+				m_OutputStream << "    Number of failed steps: " << m_NumberOfStepsFailed <<
+					" out of " << m_NumberOfStepsInScenario << std::endl;
+				auto omittedSteps = m_NumberOfStepsInScenario - m_NumberOfStepsPassed - m_NumberOfStepsFailed;
+				if (omittedSteps > 0)
+				{
+					m_OutputStream << "    Number of omitted steps: " << omittedSteps <<
+						" out of " << m_NumberOfStepsInScenario << std::endl;
+				}
+				else
+					++m_NumberOfScenariosFailed;
+			}
+			m_OutputStream << std::endl;
+			m_NumberOfStepsInScenario = m_NumberOfStepsPassed = m_NumberOfStepsFailed = 0;
+		}
+
+		void FinishedTestSuite() override
+		{
+			m_OutputStream << "Finished execution of test suite." << std::endl;
+			if (m_NumberOfScenariosFailed == 0 && m_NumberOfScenariosTerminated == 0)
+				m_OutputStream << "  All scenarios completed successfully." << std::endl;
+			else
+			{
+				if (m_NumberOfScenariosFailed > 0)
+					m_OutputStream << "  Number of failed scenarios: " << m_NumberOfScenariosFailed <<
+					" out of " << m_NumberOfScenarios << std::endl;
+				if (m_NumberOfScenariosTerminated > 0)
+					m_OutputStream << "  Number of terminated scenarios: " << m_NumberOfScenariosTerminated <<
+					" out of " << m_NumberOfScenarios << std::endl;
+			}
+			m_NumberOfScenarios = m_NumberOfScenariosFailed = m_NumberOfScenariosTerminated = 0;
+		}
+
+		std::size_t GetNumberOfScenariosPassed()
+		{
+			return m_NumberOfScenarios - m_NumberOfScenariosFailed - m_NumberOfScenariosTerminated;
+		}
+
+		std::size_t GetNumberOfScenarios()
+		{
+			return m_NumberOfScenarios;
+		}
+
+	private:
+		std::ostream& m_OutputStream;
+		std::size_t m_NumberOfScenarios = 0;
+		std::size_t m_NumberOfScenariosFailed = 0;
+		std::size_t m_NumberOfScenariosTerminated = 0;
+		std::size_t m_NumberOfStepsInScenario = 0;
+		std::size_t m_NumberOfStepsPassed = 0;
+		std::size_t m_NumberOfStepsFailed = 0;
+		bool m_StepPassed = true;
+	};
 
     // In most cases you have more than one test scenario with sequential steps that has its own starting point, steps, and cleanup.
     // To accommodate these situations you can use a test suite which is basically a collection of unrelated test scenarios. Simply
@@ -370,152 +486,32 @@ namespace ProTest {
 
     class AccTestSuite {
     public:
+		AccTestSuite()
+			: m_TestObs(std::make_shared<AccTestObserver>(std::cout)) { }
 
-        AccTestSuiteReport Run() {
-            AccTestSuiteReport suiteReport;
-            for (auto test : m_Scenarios) {
-                test->Run();
-                const auto& scenReport = test->GetReport();
-                if (scenReport.AllPassed)
-                    suiteReport.PassedScenarios.push_back(scenReport);
-                else if (scenReport.NumberOfOmitted > 0)
-                    suiteReport.TerminatedScenarios.push_back(scenReport);
-                else
-                    suiteReport.FailedScenarios.push_back(scenReport);
-            }
-            suiteReport.NumberOfScenarios = m_Scenarios.size();
-            suiteReport.NumberOfPassed = suiteReport.PassedScenarios.size();
-            suiteReport.NumberOfFailed = suiteReport.FailedScenarios.size();
-            suiteReport.NumberOfTerminated = suiteReport.TerminatedScenarios.size();
-            suiteReport.AllPassed = suiteReport.NumberOfPassed == suiteReport.NumberOfScenarios;
-            return suiteReport;
+		void SetTestObserver(std::shared_ptr<AccTestObserverIface> testObs)
+		{
+			m_TestObs = testObs;
+		}
+
+        void Run() {
+			m_TestObs->StartingTestSuite(m_Scenarios.size());
+            for (auto test : m_Scenarios)
+                test->Run(m_TestObs);
+			m_TestObs->FinishedTestSuite();
         }
 
     protected:
 
-        void AddScenario(std::shared_ptr<AccTestScenarioBase> scen) {
-            m_Scenarios.push_back(scen);
-        }
+		template <class ScenType, class... Args>
+		void CreateScenario(Args... constructionArgs)
+		{
+			m_Scenarios.push_back(std::make_shared<ScenType>(constructionArgs...));
+		}
 
     private:
         std::vector< std::shared_ptr<AccTestScenarioBase> > m_Scenarios;
-    };
-
-    // Use AccTestReportFormatter to use the result from running a test scenario or a complete test suite and generate a text 
-    // report and send it to an output stream. You can provide options to indicate whether you want details of the passed, 
-    // failed, and terminated test scenarios, and the failed, passed, and omitted test steps for each detailed scenario.
-    // The default behaviour is to generate a detailed report only for failed test steps of the failed test scenarios.
-
-    class AccTestReportFormatter {
-    public:
-        AccTestReportFormatter() = default;
-
-        AccTestReportFormatter(bool detailFailedTests, bool detailPassedTests, bool detailTerminatedTests, 
-        bool detailFailedSteps, bool detailPassedSteps, bool detailOmittedSteps)
-        : m_DetailPassedSteps(detailPassedSteps),
-        m_DetailFailedSteps(detailFailedSteps),
-        m_DetailOmittedSteps(detailOmittedSteps),
-        m_DetailPassedScenarios(detailPassedTests),
-        m_DetailFailedScenarios(detailFailedTests),
-        m_DetailTerminatedScenarios(detailTerminatedTests) {
-        }
-
-        void GenerateReport(const AccTestSuiteReport& rep, std::ostream& strm = std::cout) {
-            strm << "Total number of tests: " << rep.NumberOfScenarios << std::endl;
-            if (rep.AllPassed) {
-                strm << "*** ALL TESTS PASSED ***" << std::endl;
-                if (!m_DetailPassedScenarios)
-                    return;
-            }
-
-            strm << "*** ONE OR MORE TESTS FAILED ***" << std::endl;
-
-            strm << "Number of failed tests: " << rep.NumberOfFailed << std::endl;
-            strm << "Number of passed tests: " << rep.NumberOfPassed << std::endl;
-            if (rep.NumberOfTerminated > 0)
-                strm << "Number of steps terminated tests: " << rep.NumberOfTerminated << std::endl;
-
-            if (m_DetailFailedScenarios)
-                DetailScenarios(strm, rep.FailedScenarios,
-                    "\n**********************************************************"
-                    "\n********************** FAILED TESTS **********************");
-
-            if (m_DetailPassedScenarios)
-                DetailScenarios(strm, rep.PassedScenarios,
-                    "\n**********************************************************"
-                    "\n********************** PASSED TESTS **********************");
-
-            if (m_DetailTerminatedScenarios)
-                DetailScenarios(strm, rep.TerminatedScenarios,
-                    "\n**********************************************************"
-                    "\n******************** TERMINATED TESTS ********************");
-        }
-
-        void GenerateReport(const AccTestScenarioReport& rep, std::ostream& strm = std::cout) {
-            strm << "Scenario name: " << rep.Name << std::endl;
-            strm << "Description: " << rep.Description << std::endl;
-            strm << "Total number of steps: " << rep.NumberOfSteps << std::endl;
-            if (rep.AllPassed) {
-                strm << "*** ALL STEPS PASSED ***" << std::endl;
-                if (!m_DetailPassedSteps)
-                    return;
-            }
-
-            strm << "*** ONE OR MORE TEST STEPS FAILED ***" << std::endl;
-
-            if (rep.NumberOfActed != rep.NumberOfSteps)
-                strm << "Number of steps taken: " << rep.NumberOfActed << std::endl;
-
-            strm << "Number of steps successfully passed: " << rep.NumberOfPassed << std::endl;
-            strm << "Number of steps failed: " << rep.NumberOfFailed << std::endl;
-
-            if (rep.NumberOfOmitted > 0)
-                strm << "Number of steps omitted: " << rep.NumberOfOmitted << std::endl;
-            if (rep.RequiredStepFailure)
-                strm << "** Trailing test steps were omitted because a required step failed. **" << std::endl;
-
-            if (m_DetailFailedSteps)
-                DetailSteps(strm, rep.FailedSteps, "\n********************** FAILED STEPS **********************");
-
-            if (m_DetailPassedSteps)
-                DetailSteps(strm, rep.PassedSteps, "\n********************** PASSED STEPS **********************");
-
-            if (m_DetailOmittedSteps)
-                DetailSteps(strm, rep.OmittedSteps, "\n********************** OMITTED STEPS **********************");
-        }
-
-    private:
-
-        void DetailScenarios(std::ostream& strm, const std::vector<AccTestScenarioReport>& reps, const std::string& title) {
-            if (reps.empty())
-                return;
-
-            strm << title << std::endl << std::endl;
-            for (const auto& rep : reps)
-                GenerateReport(rep, strm);
-        }
-
-        void DetailSteps(std::ostream& strm, const std::vector<AccTestStepReport>& reps, const std::string& title) {
-            if (reps.empty())
-                return;
-
-            strm << title << std::endl;
-            for (const auto& stepRep : reps) {
-                strm << "\tName: " << stepRep.Name << std::endl <<
-                        "\tDescription: " << stepRep.Description << std::endl;
-                for (const auto& output : stepRep.CheckOutputs)
-					if (!stepRep.CheckOutputs.empty())
-						strm << "\t\tCheck #" << output.first << " => " << output.second << std::endl;
-                strm << std::endl;
-            }
-        }
-
-        bool m_DetailFailedSteps = true;
-        bool m_DetailPassedSteps = false;
-        bool m_DetailOmittedSteps = false;
-        bool m_DetailFailedScenarios = true;
-        bool m_DetailPassedScenarios = false;
-        bool m_DetailTerminatedScenarios = false;
+		std::shared_ptr<AccTestObserverIface> m_TestObs;
     };
 
     // In the main() function of your test executable you will probably have an instance of AccTestRunner specialized with your 
@@ -532,11 +528,11 @@ namespace ProTest {
         }
 
         int Run() {
-            TestSuiteType testSuite;
-            auto report = testSuite.Run();
-            AccTestReportFormatter fmt(true, false, true, true, false, false);
-            fmt.GenerateReport(report);
-            return report.NumberOfScenarios - report.NumberOfPassed;
+			auto testObserver = std::make_shared<AccTestObserver>(std::cout);
+			TestSuiteType testSuite;
+			testSuite.SetTestObserver(testObserver);
+			testSuite.Run();
+            return testObserver->GetNumberOfScenarios() - testObserver->GetNumberOfScenariosPassed();
         }
     };
 
